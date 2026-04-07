@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Recycle Bin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body>
+
+<!-- ── Toast container ── -->
+<div id="toasts"></div>
+
+<!-- ── Confirm dialog ── -->
+<div id="confirm-overlay" class="hidden">
+  <div class="confirm-box">
+    <div class="confirm-icon" id="confirm-icon">🗑</div>
+    <div class="confirm-title" id="confirm-title">Are you sure?</div>
+    <div class="confirm-body"  id="confirm-body">This action cannot be undone.</div>
+    <div class="confirm-btns">
+      <button class="btn btn-ghost" id="confirm-cancel">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── App shell ── -->
+<div id="app">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">🗑</span>
+      <span class="logo-text">RecycleBin</span>
+    </div>
+
+    <div class="sidebar-stats" id="sidebar-stats">
+      <div class="stat-row">
+        <span class="stat-label">Items</span>
+        <span class="stat-val" id="stat-items">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Total size</span>
+        <span class="stat-val" id="stat-size">—</span>
+      </div>
+      <div class="stat-fill-wrap" title="Recycle Bin usage">
+        <div class="stat-fill" id="stat-fill"></div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-filter="all">
+        <span class="nav-icon">📋</span> All Items
+      </button>
+      <button class="nav-item" data-filter="folder">
+        <span class="nav-icon">📁</span> Folders
+      </button>
+      <button class="nav-item" data-filter="image">
+        <span class="nav-icon">🖼</span> Images
+      </button>
+      <button class="nav-item" data-filter="video">
+        <span class="nav-icon">🎬</span> Videos
+      </button>
+      <button class="nav-item" data-filter="audio">
+        <span class="nav-icon">🎵</span> Audio
+      </button>
+      <button class="nav-item" data-filter="document">
+        <span class="nav-icon">📄</span> Documents
+      </button>
+      <button class="nav-item" data-filter="code">
+        <span class="nav-icon">💻</span> Code
+      </button>
+      <button class="nav-item" data-filter="archive">
+        <span class="nav-icon">📦</span> Archives
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="btn btn-danger btn-full" id="btn-empty-all">
+        🗑 Empty Recycle Bin
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Main panel ── -->
+  <main class="main">
+
+    <!-- ── Toolbar ── -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search-input" class="search-input" placeholder="Search files…" autocomplete="off"/>
+          <button class="search-clear hidden" id="search-clear">✕</button>
+        </div>
+
+        <div class="drive-filter" id="drive-filter">
+          <!-- drive buttons injected -->
+        </div>
+      </div>
+
+      <div class="toolbar-right">
+        <!-- Bulk action bar (shown when items selected) -->
+        <div class="bulk-bar hidden" id="bulk-bar">
+          <span class="bulk-count" id="bulk-count">0 selected</span>
+          <button class="btn btn-sm btn-ghost" id="btn-bulk-restore">↩ Restore</button>
+          <button class="btn btn-sm btn-danger" id="btn-bulk-delete">🗑 Delete</button>
+          <button class="btn btn-sm btn-ghost" id="btn-deselect">✕</button>
+        </div>
+
+        <div class="view-toggle">
+          <button class="view-btn active" id="view-list"  title="List view">☰</button>
+          <button class="view-btn"        id="view-grid"  title="Grid view">⊞</button>
+        </div>
+
+        <button class="btn btn-sm btn-ghost" id="btn-refresh" title="Refresh">↻</button>
+
+        <div class="sort-wrap">
+          <select class="sort-select" id="sort-select">
+            <option value="date-desc">Date ↓</option>
+            <option value="date-asc">Date ↑</option>
+            <option value="name-asc">Name A–Z</option>
+            <option value="name-desc">Name Z–A</option>
+            <option value="size-desc">Size ↓</option>
+            <option value="size-asc">Size ↑</option>
+            <option value="type-asc">Type</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Column headers (list view) ── -->
+    <div class="list-header" id="list-header">
+      <div class="col-check">
+        <input type="checkbox" id="chk-all" title="Select all"/>
+      </div>
+      <div class="col-icon"></div>
+      <div class="col-name sortable" data-col="name">Name <span class="sort-arr"></span></div>
+      <div class="col-orig sortable" data-col="path">Original location</div>
+      <div class="col-date sortable" data-col="date">Deleted <span class="sort-arr"></span></div>
+      <div class="col-size sortable" data-col="size">Size <span class="sort-arr"></span></div>
+      <div class="col-type">Type</div>
+      <div class="col-actions"></div>
+    </div>
+
+    <!-- ── Item list ── -->
+    <div class="item-container list-view" id="item-container">
+      <div class="loading-state" id="loading-state">
+        <div class="spinner-large"></div>
+        <p>Reading Recycle Bin…</p>
+      </div>
+    </div>
+
+    <!-- ── Status bar ── -->
+    <div class="statusbar">
+      <span id="status-text">Ready</span>
+      <span class="status-right" id="status-right"></span>
+    </div>
+
+  </main>
+</div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>
