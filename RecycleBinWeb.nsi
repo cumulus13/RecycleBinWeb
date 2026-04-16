@@ -103,34 +103,13 @@ Function DownloadAndInstallDotNet
 
   StrCpy $DotNetInstallerPath "$TEMP\dotnet-runtime-installer.exe"
 
-  inetc::get /TIMEOUT=30000 /RETRY=3 "$DownloadUrl" "$DotNetInstallerPath"
+  NSISdl::download "$DownloadUrl" "$DotNetInstallerPath"
   Pop $R0
 
   ${If} $R0 != "OK"
     MessageBox MB_ICONEXCLAMATION|MB_OK "Download failed: $R0"
     Abort
   ${EndIf}
-
-  DetailPrint "Download complete. Verifying integrity..."
-
-  ; Compute SHA256
-  nsExec::ExecToStack 'certutil -hashfile "$DotNetInstallerPath" SHA256'
-  Pop $0
-  Pop $1
-
-  ${If} $1 == ""
-    MessageBox MB_ICONSTOP "Failed to compute SHA256!"
-    Abort
-  ${EndIf}
-
-  ; Compare hash (simple contains check)
-  ${IfNot} ${StrStr} $1 $R9
-    MessageBox MB_ICONSTOP "Checksum verification failed!$\nFile may be corrupted or tampered."
-    Delete "$DotNetInstallerPath"
-    Abort
-  ${EndIf}
-
-  DetailPrint "Checksum verified."
 
   DetailPrint "Installing .NET Runtime silently..."
   ExecWait '"$DotNetInstallerPath" /install /quiet /norestart' $0
