@@ -13,6 +13,9 @@
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "LogicLib.nsh"
+!include "FileFunc.nsh"
+!include "WordFunc.nsh"
+!include "StrFunc.nsh"
 
 ; General settings
 Name "${APP_NAME} ${APP_VERSION}"
@@ -60,71 +63,88 @@ FunctionEnd
 
 Function CheckDotNetRuntime
   DetailPrint "Checking for .NET ${DOTNET_VERSION} Runtime..."
-  
-  ; Simple check: just look for registry key existence
-  ClearErrors
+
+  StrCpy $DotNetInstalled "0"
+  StrCpy $3 0
+
   ${If} ${RunningX64}
-    ReadRegStr $0 HKLM "SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedhost" "Version"
+    StrCpy $1 "SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.NETCore.App"
   ${Else}
-    ReadRegStr $0 HKLM "SOFTWARE\dotnet\Setup\InstalledVersions\x86\sharedhost" "Version"
+    StrCpy $1 "SOFTWARE\dotnet\Setup\InstalledVersions\x86\sharedfx\Microsoft.NETCore.App"
   ${EndIf}
-  
-  ${If} ${Errors}
-    ; Try alternative registry location
+
+  loop:
     ClearErrors
-    EnumRegKey $0 HKLM "SOFTWARE\dotnet\Setup\InstalledVersions\x64\sharedfx\Microsoft.NETCore.App" 0
+    EnumRegKey $0 HKLM "$1" $3
     ${If} ${Errors}
-      DetailPrint ".NET ${DOTNET_VERSION} Runtime not found"
-      StrCpy $DotNetInstalled "0"
-    ${Else}
-      DetailPrint ".NET Runtime found"
-      StrCpy $DotNetInstalled "1"
+      Goto done
     ${EndIf}
-  ${Else}
-    DetailPrint ".NET Runtime found: $0"
-    StrCpy $DotNetInstalled "1"
-  ${EndIf}
+
+    DetailPrint "Found runtime version: $0"
+
+    StrCpy $2 $0 2
+    ${If} $2 == "8."
+      StrCpy $DotNetInstalled "1"
+      DetailPrint ".NET ${DOTNET_VERSION} Runtime found: $0"
+      Goto done
+    ${EndIf}
+
+    IntOp $3 $3 + 1
+    Goto loop
+
+  done:
+    ${If} $DotNetInstalled == "0"
+      DetailPrint ".NET ${DOTNET_VERSION} Runtime not found"
+    ${EndIf}
 FunctionEnd
 
 Function DownloadAndInstallDotNet
   DetailPrint "Downloading .NET ${DOTNET_VERSION} Runtime..."
-  
-  ; Set temp path for installer
-  StrCpy $DotNetInstallerPath "$TEMP\dotnet-runtime-8.0.3-installer.exe"
-  
-  ; Download using NSISdl
-  NSISdl::download /TIMEOUT=30000 "$DownloadUrl" "$DotNetInstallerPath"
+
+  StrCpy $DotNetInstallerPath "$TEMP\dotnet-runtime-installer.exe"
+
+  inetc::get /TIMEOUT=30000 /RETRY=3 "$DownloadUrl" "$DotNetInstallerPath"
   Pop $R0
-  
-  ${If} $R0 == "success"
-    DetailPrint "Download complete. Installing .NET Runtime..."
-    
-    ; Run installer with silent flags
-    DetailPrint "Running: $DotNetInstallerPath /install /quiet /norestart"
-    ExecWait '"$DotNetInstallerPath" /install /quiet /norestart' $0
-    
-    ${If} $0 == 0
-      DetailPrint ".NET Runtime installed successfully"
-      Delete "$DotNetInstallerPath"
-    ${ElseIf} $0 == 3010
-      DetailPrint ".NET Runtime installed (reboot required)"
-      Delete "$DotNetInstallerPath"
-    ${Else}
-      DetailPrint "Installation returned code: $0"
-      MessageBox MB_ICONEXCLAMATION|MB_OK ".NET Runtime installation failed (Error: $0).$\n$\nPlease install manually from:$\n$DownloadUrl"
-      Delete "$DotNetInstallerPath"
-      Abort
-    ${EndIf}
-  ${Else}
-    DetailPrint "Download failed: $R0"
-    MessageBox MB_ICONEXCLAMATION|MB_YESNO "Failed to download .NET Runtime.$\n$\nWould you like to open the download page in your browser?" IDYES OpenBrowser IDNO SkipBrowser
-    
-    OpenBrowser:
-      ExecShell "open" "$DownloadUrl"
-    
-    SkipBrowser:
+
+  ${If} $R0 != "OK"
+    MessageBox MB_ICONEXCLAMATION|MB_OK "Download failed: $R0"
     Abort
   ${EndIf}
+
+  DetailPrint "Download complete. Verifying integrity..."
+
+  ; Compute SHA256
+  nsExec::ExecToStack 'certutil -hashfile "$DotNetInstallerPath" SHA256'
+  Pop $0
+  Pop $1
+
+  ${If} $1 == ""
+    MessageBox MB_ICONSTOP "Failed to compute SHA256!"
+    Abort
+  ${EndIf}
+
+  ; Compare hash (simple contains check)
+  ${IfNot} ${StrStr} $1 $R9
+    MessageBox MB_ICONSTOP "Checksum verification failed!$\nFile may be corrupted or tampered."
+    Delete "$DotNetInstallerPath"
+    Abort
+  ${EndIf}
+
+  DetailPrint "Checksum verified."
+
+  DetailPrint "Installing .NET Runtime silently..."
+  ExecWait '"$DotNetInstallerPath" /install /quiet /norestart' $0
+
+  ${If} $0 == 0
+    DetailPrint ".NET installed successfully"
+  ${ElseIf} $0 == 3010
+    DetailPrint ".NET installed (reboot required)"
+  ${Else}
+    MessageBox MB_ICONSTOP "Installation failed with code: $0"
+    Abort
+  ${EndIf}
+
+  Delete "$DotNetInstallerPath"
 FunctionEnd
 
 ; ============================================================================
